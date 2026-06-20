@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #0a0a0f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Courier New', monospace;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+  #wrap {
+    position: relative;
+    width: min(90vw, 90vh, 560px);
+    aspect-ratio: 1 / 1;
+  }
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+  }
+  #bg { z-index: 0; }
+  #game { z-index: 1; }
+  #hud {
+    position: absolute;
+    z-index: 2;
+    top: -42px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    color: #e8e8e8;
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+  #overlay {
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: rgba(0,0,0,0.55);
+    border-radius: 8px;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 { margin: 0 0 8px; font-size: 28px; }
+  #overlay p { margin: 4px 0; opacity: 0.85; font-size: 14px; }
+  #overlay button {
+    margin-top: 16px;
+    padding: 10px 22px;
+    font-size: 16px;
+    background: #4ecb71;
+    border: none;
+    border-radius: 6px;
+    color: #06210f;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #overlay button:active { transform: scale(0.97); }
+  #diffRow {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .diffBtn {
+    padding: 8px 14px;
+    font-size: 13px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    color: #ddd;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .diffBtn.active {
+    background: #4ecb71;
+    color: #06210f;
+    border-color: #4ecb71;
+    font-weight: bold;
+  }
+  #muteBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    color: #e8e8e8;
+    padding: 0 6px;
+    line-height: 1;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <span id="score">Score: 0</span>
+    <button id="muteBtn" title="Toggle sound">🔊</button>
+    <span id="best">Best: 0</span>
+  </div>
+  <canvas id="bg"></canvas>
+  <canvas id="game"></canvas>
+  <div id="overlay">
+    <h1 id="overlayTitle">Snake</h1>
+    <p>Arrow keys / WASD / swipe to move</p>
+    <p>Space to pause</p>
+    <div id="diffRow">
+      <button class="diffBtn" data-diff="easy">Easy</button>
+      <button class="diffBtn" data-diff="medium">Medium</button>
+      <button class="diffBtn" data-diff="hard">Hard</button>
+      <button class="diffBtn" data-diff="iranian">Iranian</button>
+    </div>
+    <button id="startBtn">Start</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   WEBGL BACKGROUND LAYER — purely decorative animated glow.
+   No game state lives here. If this throws, game still runs.
+   ========================================================= */
+(function initWebGLBackground() {
+  const canvas = document.getElementById('bg');
+  const gl = canvas.getContext('webgl');
+  if (!gl) { canvas.style.display = 'none'; return; }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = canvas.clientWidth * dpr;
+    const h = canvas.clientHeight * dpr;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+  }
+
+  const vsSrc = `
+    attribute vec2 aPos;
+    void main() {
+      gl_Position = vec4(aPos, 0.0, 1.0);
+    }
+  `;
+  const fsSrc = `
+    precision mediump float;
+    uniform float uTime;
+    uniform vec2 uResolution;
+    void main() {
+      vec2 uv = gl_FragCoord.xy / uResolution.xy;
+      vec2 c = uv - 0.5;
+      float d = length(c);
+      float pulse = 0.5 + 0.5 * sin(uTime * 0.6);
+      float glow = smoothstep(0.75, 0.0, d) * (0.18 + 0.07 * pulse);
+      vec3 base = vec3(0.04, 0.05, 0.08);
+      vec3 tint = vec3(0.10, 0.35, 0.20) * glow;
+      vec3 color = base + tint;
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.warn('Shader compile error:', gl.getShaderInfoLog(s));
+      gl.deleteShader(s);
+      return null;
+    }
+    return s;
+  }
+
+  const vs = compile(gl.VERTEX_SHADER, vsSrc);
+  const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+  if (!vs || !fs) { canvas.style.display = 'none'; return; }
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.warn('Program link error:', gl.getProgramInfoLog(program));
+    canvas.style.display = 'none';
+    return;
+  }
+
+  const verts = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+  const aPos = gl.getAttribLocation(program, 'aPos');
+  const uTime = gl.getUniformLocation(program, 'uTime');
+  const uRes = gl.getUniformLocation(program, 'uResolution');
+
+  gl.useProgram(program);
+  gl.enableVertexAttribArray(aPos);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  let raf = null;
+  function frame(t) {
+    resize();
+    gl.uniform1f(uTime, t * 0.001);
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    raf = requestAnimationFrame(frame);
+  }
+  resize();
+  raf = requestAnimationFrame(frame);
+
+  window.addEventListener('resize', resize);
+})();
+
+/* =========================================================
+   SOUND — synthesized via Web Audio API, no asset files.
+   Lazily creates AudioContext on first user gesture (required
+   by browser autoplay policies; Start button click satisfies this).
+   ========================================================= */
+const Sound = (function () {
+  let ctx = null;
+  let muted = false;
+
+  function ensureCtx() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function tone(freq, durationMs, type, gainPeak, delay = 0) {
+    if (muted) return;
+    const c = ensureCtx();
+    if (!c) return;
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    const t0 = c.currentTime + delay;
+    const dur = durationMs / 1000;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(gainPeak, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+
+  return {
+    init() { ensureCtx(); },
+    setMuted(m) { muted = m; },
+    isMuted() { return muted; },
+    eat() { tone(660, 90, 'square', 0.12); tone(880, 90, 'square', 0.10, 0.06); },
+    turn() { tone(220, 30, 'square', 0.03); },
+    death() {
+      tone(180, 160, 'sawtooth', 0.14);
+      tone(140, 220, 'sawtooth', 0.12, 0.12);
+      tone(90, 320, 'sawtooth', 0.12, 0.26);
+    },
+    win() {
+      [523, 659, 784, 1047].forEach((f, i) => tone(f, 160, 'triangle', 0.1, i * 0.12));
+    },
+    click() { tone(440, 50, 'sine', 0.05); },
+    speedUp() { tone(1000, 70, 'square', 0.08); }
+  };
+})();
+
+/* =========================================================
+   GAME LAYER — Canvas2D. All authoritative state lives here.
+   ========================================================= */
+(function initGame() {
+  const DIFFICULTIES = {
+    easy:    { grid: 16, step: 150, minStep: 100, speedupEvery: 5, speedupAmt: 3,  wrap: false, label: 'Easy' },
+    medium:  { grid: 20, step: 110, minStep: 70,  speedupEvery: 5, speedupAmt: 4,  wrap: false, label: 'Medium' },
+    hard:    { grid: 22, step: 85,  minStep: 50,  speedupEvery: 4, speedupAmt: 4,  wrap: false, label: 'Hard' },
+    iranian: { grid: 26, step: 65,  minStep: 38,  speedupEvery: 3, speedupAmt: 4,  wrap: true,  label: 'Iranian' }
+  };
+  let currentDiff = 'medium';
+  let GRID, STEP_MS, MIN_STEP_MS, SPEEDUP_EVERY, SPEEDUP_AMOUNT, WRAP;
+
+  function applyDifficulty(key) {
+    currentDiff = key;
+    const d = DIFFICULTIES[key];
+    GRID = d.grid;
+    STEP_MS = d.step;
+    MIN_STEP_MS = d.minStep;
+    SPEEDUP_EVERY = d.speedupEvery;
+    SPEEDUP_AMOUNT = d.speedupAmt;
+    WRAP = d.wrap;
+  }
+  applyDifficulty(currentDiff);
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const overlay = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const startBtn = document.getElementById('startBtn');
+  const muteBtn = document.getElementById('muteBtn');
+  const diffBtns = Array.from(document.querySelectorAll('.diffBtn'));
+
+  diffBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.diff === currentDiff);
+    btn.addEventListener('click', () => {
+      if (paused) return; // don't let a paused mid-game switch silently reset the board
+      Sound.init();
+      Sound.click();
+      diffBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyDifficulty(btn.dataset.diff);
+      bestEl.textContent = 'Best: ' + getBest();
+      resizeCanvas();
+      resetState();
+      render();
+    });
+  });
+
+  muteBtn.addEventListener('click', () => {
+    Sound.init();
+    const m = !Sound.isMuted();
+    Sound.setMuted(m);
+    muteBtn.textContent = m ? '🔇' : '🔊';
+  });
+
+  let cell = 0;       // px per cell, computed on resize
+  let dpr = 1;
+
+  function resizeCanvas() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const size = canvas.clientWidth; // square, css-driven
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
+    cell = canvas.width / GRID;
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  // ---- State ----
+  let snake;            // array of {x,y}, index 0 = head
+  let dir;               // current movement direction {x,y}
+  let queuedDirs;         // input buffer, max 2 deep, to prevent double-turn-into-self bug
+  let food;
+  let score;
+  let stepMs;
+  let acc = 0;
+  let lastTs = 0;
+  let running = false;
+  let paused = false;
+  let gameOver = false;
+  let rafId = null;
+
+  function bestKey() { return 'snakeBest_' + currentDiff; }
+  function getBest() { return Number(localStorage.getItem(bestKey()) || 0); }
+  function setBest(v) { localStorage.setItem(bestKey(), String(v)); }
+
+  bestEl.textContent = 'Best: ' + getBest();
+
+  function resetState() {
+    const mid = Math.floor(GRID / 2);
+    snake = [
+      { x: mid - 1, y: mid },
+      { x: mid - 2, y: mid },
+      { x: mid - 3, y: mid }
+    ];
+    dir = { x: 1, y: 0 };
+    queuedDirs = [];
+    score = 0;
+    stepMs = STEP_MS;
+    acc = 0;
+    gameOver = false;
+    paused = false;
+    placeFood();
+    scoreEl.textContent = 'Score: 0';
+  }
+
+  function placeFood() {
+    // Guaranteed valid placement: build free-cell list, pick uniformly.
+    // Avoids infinite random-retry loops when snake nearly fills the board.
+    const occupied = new Set(snake.map(s => s.x + ',' + s.y));
+    const free = [];
+    for (let x = 0; x < GRID; x++) {
+      for (let y = 0; y < GRID; y++) {
+        const k = x + ',' + y;
+        if (!occupied.has(k)) free.push({ x, y });
+      }
+    }
+    if (free.length === 0) {
+      // Full board = win condition, handled by caller via checkWin()
+      food = null;
+      return;
+    }
+    food = free[Math.floor(Math.random() * free.length)];
+  }
+
+  function checkWin() {
+    return snake.length >= GRID * GRID;
+  }
+
+  // ---- Input ----
+  const KEY_DIRS = {
+    ArrowUp: { x: 0, y: -1 }, w: { x: 0, y: -1 }, W: { x: 0, y: -1 },
+    ArrowDown: { x: 0, y: 1 }, s: { x: 0, y: 1 }, S: { x: 0, y: 1 },
+    ArrowLeft: { x: -1, y: 0 }, a: { x: -1, y: 0 }, A: { x: -1, y: 0 },
+    ArrowRight: { x: 1, y: 0 }, d: { x: 1, y: 0 }, D: { x: 1, y: 0 }
+  };
+
+  function queueDir(nd) {
+    if (!nd) return;
+    // Reference direction = last queued dir, or current dir if queue empty.
+    // Prevents queuing two turns in one tick that combine into a 180 reversal
+    // (e.g. queued Up then Left while still processing Right -> would hit neck).
+    const ref = queuedDirs.length ? queuedDirs[queuedDirs.length - 1] : dir;
+    const isReverse = nd.x === -ref.x && nd.y === -ref.y;
+    const isSame = nd.x === ref.x && nd.y === ref.y;
+    if (isReverse || isSame) return;
+    if (queuedDirs.length < 2) queuedDirs.push(nd);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (running && !gameOver) togglePause();
+      return;
+    }
+    const nd = KEY_DIRS[e.key];
+    if (nd) {
+      e.preventDefault();
+      if (!running) return;
+      queueDir(nd);
+    }
+  });
+
+  // Touch swipe support
+  let touchStart = null;
+  canvas.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    touchStart = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+  canvas.addEventListener('touchend', (e) => {
+    if (!touchStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    touchStart = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return; // ignore tap
+    if (Math.abs(dx) > Math.abs(dy)) {
+      queueDir(dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 });
+    } else {
+      queueDir(dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 });
+    }
+  }, { passive: true });
+
+  function togglePause() {
+    paused = !paused;
+    if (paused) {
+      document.getElementById('diffRow').style.display = 'none';
+      showOverlay('Paused', 'Resume');
+    } else {
+      hideOverlay();
+      lastTs = performance.now(); // avoid huge delta jump after resume
+    }
+  }
+
+  // ---- Tick / simulation ----
+  function tick() {
+    if (queuedDirs.length) {
+      dir = queuedDirs.shift();
+      Sound.turn();
+    }
+
+    const head = snake[0];
+    let nx = head.x + dir.x;
+    let ny = head.y + dir.y;
+
+    if (WRAP) {
+      // Iranian mode: walls wrap instead of killing.
+      nx = (nx + GRID) % GRID;
+      ny = (ny + GRID) % GRID;
+    } else if (nx < 0 || nx >= GRID || ny < 0 || ny >= GRID) {
+      return endGame();
+    }
+
+    // Self collision: check against body, but the tail cell is allowed
+    // because it will vacate this same tick (unless we're about to eat,
+    // in which case the tail does NOT move, so it must stay blocked).
+    const willEat = food && nx === food.x && ny === food.y;
+    const bodyToCheck = willEat ? snake : snake.slice(0, -1);
+    for (let i = 0; i < bodyToCheck.length; i++) {
+      if (bodyToCheck[i].x === nx && bodyToCheck[i].y === ny) {
+        return endGame();
+      }
+    }
+
+    snake.unshift({ x: nx, y: ny });
+
+    if (willEat) {
+      score++;
+      scoreEl.textContent = 'Score: ' + score;
+      Sound.eat();
+      if (score % SPEEDUP_EVERY === 0) {
+        stepMs = Math.max(MIN_STEP_MS, stepMs - SPEEDUP_AMOUNT);
+        Sound.speedUp();
+      }
+      if (checkWin()) {
+        return endGame(true);
+      }
+      placeFood();
+    } else {
+      snake.pop();
+    }
+  }
+
+  function endGame(won) {
+    running = false;
+    gameOver = true;
+    const best = getBest();
+    if (score > best) {
+      setBest(score);
+      bestEl.textContent = 'Best: ' + score;
+    }
+    if (won) Sound.win(); else Sound.death();
+    showOverlay(
+      won ? 'You Win!' : 'Game Over',
+      'Play Again',
+      `Score: ${score}  •  Best: ${Math.max(score, best)}  •  ${DIFFICULTIES[currentDiff].label}`
+    );
+  }
+
+  // ---- Render ----
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // grid (subtle)
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < GRID; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, canvas.height);
+      ctx.moveTo(0, i * cell); ctx.lineTo(canvas.width, i * cell);
+      ctx.stroke();
+    }
+
+    // food
+    if (food) {
+      const fx = food.x * cell + cell / 2;
+      const fy = food.y * cell + cell / 2;
+      const r = cell * 0.38;
+      ctx.fillStyle = '#ff5d5d';
+      ctx.beginPath();
+      ctx.arc(fx, fy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath();
+      ctx.arc(fx - r * 0.3, fy - r * 0.3, r * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // snake
+    for (let i = snake.length - 1; i >= 0; i--) {
+      const s = snake[i];
+      const px = s.x * cell;
+      const py = s.y * cell;
+      const pad = cell * 0.08;
+      const isHead = i === 0;
+      ctx.fillStyle = isHead ? '#6ef08a' : '#4ecb71';
+      roundRect(ctx, px + pad, py + pad, cell - pad * 2, cell - pad * 2, cell * 0.22);
+      ctx.fill();
+      if (isHead) {
+        drawEyes(s, dir);
+      }
+    }
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function drawEyes(head, d) {
+    const cx = head.x * cell + cell / 2;
+    const cy = head.y * cell + cell / 2;
+    const off = cell * 0.18;
+    // perpendicular offset for eye pair, forward offset toward direction
+    const perpX = -d.y, perpY = d.x;
+    const fwdX = d.x * off, fwdY = d.y * off;
+    const e1x = cx + perpX * off + fwdX, e1y = cy + perpY * off + fwdY;
+    const e2x = cx - perpX * off + fwdX, e2y = cy - perpY * off + fwdY;
+    ctx.fillStyle = '#06210f';
+    const r = cell * 0.08;
+    ctx.beginPath(); ctx.arc(e1x, e1y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x, e2y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ---- Loop ----
+  function loop(ts) {
+    if (!running || paused) return;
+    if (!lastTs) lastTs = ts;
+    let delta = ts - lastTs;
+    lastTs = ts;
+    // Clamp delta so a dropped/backgrounded tab doesn't fire many ticks at once
+    if (delta > 250) delta = 250;
+    acc += delta;
+    while (acc >= stepMs) {
+      tick();
+      acc -= stepMs;
+      if (gameOver) { acc = 0; break; }
+    }
+    render();
+    if (!gameOver) rafId = requestAnimationFrame(loop);
+  }
+
+  function showOverlay(title, btnLabel, subtitle) {
+    if (title !== 'Paused') {
+      document.getElementById('diffRow').style.display = 'flex';
+    }
+    overlayTitle.textContent = title;
+    startBtn.textContent = btnLabel;
+    let sub = overlay.querySelector('#subtitle');
+    if (subtitle) {
+      if (!sub) {
+        sub = document.createElement('p');
+        sub.id = 'subtitle';
+        overlay.insertBefore(sub, startBtn);
+      }
+      sub.textContent = subtitle;
+    } else if (sub) {
+      sub.remove();
+    }
+    overlay.classList.remove('hidden');
+  }
+  function hideOverlay() {
+    overlay.classList.add('hidden');
+  }
+
+  function start() {
+    resizeCanvas();
+    resetState();
+    running = true;
+    paused = false;
+    lastTs = 0;
+    hideOverlay();
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener('click', () => {
+    Sound.init();
+    Sound.click();
+    start();
+  });
+
+  // Initial paint so board isn't blank behind the start overlay
+  resizeCanvas();
+  resetState();
+  render();
+  showOverlay('Snake', 'Start');
+})();
+</script>
+</body>
+</html>
