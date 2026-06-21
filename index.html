@@ -8,18 +8,34 @@
   html, body {
     margin: 0;
     height: 100%;
-    background: #0a0a0f;
+    background: #07070c;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Courier New', monospace;
+    font-family: 'Segoe UI', system-ui, -apple-system, 'Courier New', monospace;
     overscroll-behavior: none;
     touch-action: none;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    flex-direction: column;
+    padding: 12px;
+    box-sizing: border-box;
+    min-height: 100svh;
+    gap: 10px;
+    overflow-y: auto;
   }
   #wrap {
     position: relative;
-    width: min(90vw, 90vh, 560px);
+    width: min(92vw, 72svh, 520px);
     aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+  }
+  body.is-fullscreen #wrap {
+    width: min(95vw, 85svh, 700px);
+  }
+  body.is-fullscreen #hud {
+    width: min(95vw, 85svh, 700px);
   }
   canvas {
     position: absolute;
@@ -29,18 +45,30 @@
     border-radius: 8px;
   }
   #bg { z-index: 0; }
-  #game { z-index: 1; }
+  #game { z-index: 1; touch-action: none; }
   #hud {
-    position: absolute;
-    z-index: 2;
-    top: -42px;
-    left: 0;
-    right: 0;
+    width: min(92vw, 72svh, 520px);
     display: flex;
     justify-content: space-between;
+    align-items: center;
     color: #e8e8e8;
-    font-size: 18px;
-    letter-spacing: 1px;
+    font-size: clamp(13px, 4vw, 18px);
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+  #score, #best {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  #score {
+    background: linear-gradient(135deg, #6ef08a, #4ecbb8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  #best {
+    color: #ffd24a;
+    opacity: 0.9;
   }
   #overlay {
     position: absolute;
@@ -51,27 +79,49 @@
     align-items: center;
     justify-content: center;
     color: #fff;
-    background: rgba(0,0,0,0.55);
+    background: rgba(7,7,12,0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     border-radius: 8px;
     text-align: center;
     padding: 20px;
     box-sizing: border-box;
   }
   #overlay.hidden { display: none; }
-  #overlay h1 { margin: 0 0 8px; font-size: 28px; }
-  #overlay p { margin: 4px 0; opacity: 0.85; font-size: 14px; }
-  #overlay button {
-    margin-top: 16px;
-    padding: 10px 22px;
-    font-size: 16px;
-    background: #4ecb71;
-    border: none;
-    border-radius: 6px;
-    color: #06210f;
-    font-weight: bold;
-    cursor: pointer;
+  #overlay h1 {
+    margin: 0 0 10px;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #6ef08a 0%, #4ecbb8 50%, #a8f0ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
-  #overlay button:active { transform: scale(0.97); }
+  #overlay p {
+    margin: 3px 0;
+    opacity: 0.65;
+    font-size: 13px;
+    font-weight: 400;
+  }
+  #overlay button {
+    margin-top: 18px;
+    padding: 12px 28px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    background: linear-gradient(135deg, #4ecb71, #3db89f);
+    border: none;
+    border-radius: 10px;
+    color: #06210f;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(78,203,113,0.35);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  #overlay button:active {
+    transform: scale(0.96);
+    box-shadow: 0 2px 10px rgba(78,203,113,0.3);
+  }
   #diffRow {
     display: flex;
     gap: 8px;
@@ -81,21 +131,23 @@
   }
   .diffBtn {
     padding: 8px 14px;
-    font-size: 13px;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 6px;
-    color: #ddd;
+    font-size: 12.5px;
+    font-weight: 600;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 20px;
+    color: #bbb;
     cursor: pointer;
     font-family: inherit;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
   .diffBtn.active {
-    background: #4ecb71;
+    background: linear-gradient(135deg, #4ecb71, #3db89f);
     color: #06210f;
-    border-color: #4ecb71;
-    font-weight: bold;
+    border-color: transparent;
+    font-weight: 700;
   }
-  #muteBtn {
+  #muteBtn, #fullscreenBtn {
     background: none;
     border: none;
     cursor: pointer;
@@ -107,17 +159,19 @@
 </style>
 </head>
 <body>
+<div id="hud">
+  <span id="score">Score: 0</span>
+  <span id="ghostTimer" style="display:none;color:#a8f0ff;">👻 0s</span>
+  <button id="fullscreenBtn" title="Toggle fullscreen">⛶</button>
+  <button id="muteBtn" title="Toggle sound">🔊</button>
+  <span id="best">Best: 0</span>
+</div>
 <div id="wrap">
-  <div id="hud">
-    <span id="score">Score: 0</span>
-    <button id="muteBtn" title="Toggle sound">🔊</button>
-    <span id="best">Best: 0</span>
-  </div>
   <canvas id="bg"></canvas>
   <canvas id="game"></canvas>
   <div id="overlay">
     <h1 id="overlayTitle">Snake</h1>
-    <p>Arrow keys / WASD / swipe to move</p>
+    <p>Arrows / WASD (any layout) / swipe</p>
     <p>Space to pause</p>
     <div id="diffRow">
       <button class="diffBtn" data-diff="easy">Easy</button>
@@ -128,6 +182,7 @@
     <button id="startBtn">Start</button>
   </div>
 </div>
+
 
 <script>
 /* =========================================================
@@ -165,9 +220,9 @@
       vec2 c = uv - 0.5;
       float d = length(c);
       float pulse = 0.5 + 0.5 * sin(uTime * 0.6);
-      float glow = smoothstep(0.75, 0.0, d) * (0.18 + 0.07 * pulse);
-      vec3 base = vec3(0.04, 0.05, 0.08);
-      vec3 tint = vec3(0.10, 0.35, 0.20) * glow;
+      float glow = smoothstep(0.75, 0.0, d) * (0.20 + 0.08 * pulse);
+      vec3 base = vec3(0.027, 0.027, 0.047);
+      vec3 tint = vec3(0.12, 0.30, 0.28) * glow;
       vec3 color = base + tint;
       gl_FragColor = vec4(color, 1.0);
     }
@@ -288,13 +343,13 @@ const Sound = (function () {
    ========================================================= */
 (function initGame() {
   const DIFFICULTIES = {
-    easy:    { grid: 16, step: 150, minStep: 100, speedupEvery: 5, speedupAmt: 3,  wrap: false, label: 'Easy' },
-    medium:  { grid: 20, step: 110, minStep: 70,  speedupEvery: 5, speedupAmt: 4,  wrap: false, label: 'Medium' },
-    hard:    { grid: 22, step: 85,  minStep: 50,  speedupEvery: 4, speedupAmt: 4,  wrap: false, label: 'Hard' },
-    iranian: { grid: 26, step: 65,  minStep: 38,  speedupEvery: 3, speedupAmt: 4,  wrap: true,  label: 'Iranian' }
+    easy:    { grid: 16, step: 150, minStep: 100, speedupEvery: 5, speedupAmt: 3,  wrap: false, obstacles: 0,  label: 'Easy' },
+    medium:  { grid: 20, step: 110, minStep: 70,  speedupEvery: 5, speedupAmt: 4,  wrap: false, obstacles: 0,  label: 'Medium' },
+    hard:    { grid: 22, step: 85,  minStep: 50,  speedupEvery: 4, speedupAmt: 4,  wrap: false, obstacles: 0,  label: 'Hard' },
+    iranian: { grid: 26, step: 110, minStep: 70,  speedupEvery: 3, speedupAmt: 4,  wrap: true,  obstacles: 14, label: 'Iranian' }
   };
   let currentDiff = 'medium';
-  let GRID, STEP_MS, MIN_STEP_MS, SPEEDUP_EVERY, SPEEDUP_AMOUNT, WRAP;
+  let GRID, STEP_MS, MIN_STEP_MS, SPEEDUP_EVERY, SPEEDUP_AMOUNT, WRAP, OBSTACLE_COUNT;
 
   function applyDifficulty(key) {
     currentDiff = key;
@@ -305,6 +360,7 @@ const Sound = (function () {
     SPEEDUP_EVERY = d.speedupEvery;
     SPEEDUP_AMOUNT = d.speedupAmt;
     WRAP = d.wrap;
+    OBSTACLE_COUNT = d.obstacles;
   }
   applyDifficulty(currentDiff);
 
@@ -316,6 +372,7 @@ const Sound = (function () {
   const overlayTitle = document.getElementById('overlayTitle');
   const startBtn = document.getElementById('startBtn');
   const muteBtn = document.getElementById('muteBtn');
+  const ghostTimerEl = document.getElementById('ghostTimer');
   const diffBtns = Array.from(document.querySelectorAll('.diffBtn'));
 
   diffBtns.forEach(btn => {
@@ -341,6 +398,46 @@ const Sound = (function () {
     muteBtn.textContent = m ? '🔇' : '🔊';
   });
 
+  // Fullscreen toggle. Targets the whole document, not just the canvas, so
+  // the entire page (HUD, board, overlay) goes fullscreen together. Feature
+  // detection covers vendor-prefixed variants on older Android WebViews;
+  // if no variant exists (notably iOS Safari for plain pages), the button
+  // is hidden entirely rather than shown and silently failing on tap.
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const fsEl = document.documentElement;
+  const requestFS = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen || fsEl.msRequestFullscreen;
+  const exitFS = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+  const fsSupported = !!(requestFS && exitFS);
+
+  if (!fsSupported) {
+    fullscreenBtn.style.display = 'none';
+  } else {
+    fullscreenBtn.addEventListener('click', () => {
+      Sound.init();
+      Sound.click();
+      const isFs = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+      if (isFs) {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+      } else {
+        (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen || fsEl.msRequestFullscreen).call(fsEl).catch(() => {
+          // Some browsers reject the promise if not triggered by a direct
+          // user gesture in their eyes; fail silently rather than throwing
+          // an unhandled error into the console mid-game.
+        });
+      }
+    });
+    const syncFsIcon = () => {
+      const isFs = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+      fullscreenBtn.textContent = isFs ? '✕' : '⛶';
+      fullscreenBtn.title = isFs ? 'Exit fullscreen' : 'Enter fullscreen';
+      document.body.classList.toggle('is-fullscreen', !!isFs);
+      resizeCanvas();
+      render();
+    };
+    document.addEventListener('fullscreenchange', syncFsIcon);
+    document.addEventListener('webkitfullscreenchange', syncFsIcon);
+  }
+
   let cell = 0;       // px per cell, computed on resize
   let dpr = 1;
 
@@ -355,9 +452,11 @@ const Sound = (function () {
 
   // ---- State ----
   let snake;            // array of {x,y}, index 0 = head
+  let prevSnake;         // snapshot of snake positions before the last tick, used only for render-time interpolation — never read by game logic
   let dir;               // current movement direction {x,y}
   let queuedDirs;         // input buffer, max 2 deep, to prevent double-turn-into-self bug
   let food;
+  let obstacles;         // array of {x,y}, only populated in Iranian mode
   let score;
   let stepMs;
   let acc = 0;
@@ -366,6 +465,29 @@ const Sound = (function () {
   let paused = false;
   let gameOver = false;
   let rafId = null;
+
+  // Purely cosmetic animation timestamps (performance.now()-based), read only
+  // by render(). None of these influence collisions, scoring, or timing.
+  const SPAWN_POP_MS = 220;
+  let foodSpawnAt = 0;
+  let eatPopAt = 0;       // last time food/powerup was eaten, for a brief burst at that cell
+  let eatPopCell = null;  // {x,y} where the last pop should render
+
+  // Iranian-mode powerups. Both spawn as collectibles on the board (not
+  // automatic) and only exist when WRAP is true (Iranian is the only mode
+  // with obstacles for ghost to matter, and we don't want stray powerups
+  // confusing the other three modes which were never designed around them).
+  const GHOST_INTERVAL_MS = 30000;
+  const GHOST_DURATION_MS = 15000;
+  const BONUS_INTERVAL_MS = 60000;
+  const BONUS_POINTS = 10;
+  let ghostPowerup = null;     // {x,y} on board, or null
+  let bonusPowerup = null;     // {x,y} on board, or null
+  let ghostSpawnAt = 0;
+  let bonusSpawnAt = 0;
+  let ghostSpawnTimer = 0;     // ms elapsed since last ghost spawn opportunity
+  let bonusSpawnTimer = 0;
+  let ghostActiveMs = 0;       // remaining ms of active ghost effect, 0 = inactive
 
   function bestKey() { return 'snakeBest_' + currentDiff; }
   function getBest() { return Number(localStorage.getItem(bestKey()) || 0); }
@@ -381,45 +503,114 @@ const Sound = (function () {
       { x: mid - 3, y: mid }
     ];
     dir = { x: 1, y: 0 };
+    prevSnake = snake.map(s => ({ x: s.x, y: s.y }));
     queuedDirs = [];
     score = 0;
     stepMs = STEP_MS;
     acc = 0;
     gameOver = false;
     paused = false;
+    ghostPowerup = null;
+    bonusPowerup = null;
+    ghostSpawnAt = 0;
+    bonusSpawnAt = 0;
+    ghostSpawnTimer = 0;
+    bonusSpawnTimer = 0;
+    ghostActiveMs = 0;
+    foodSpawnAt = performance.now();
+    eatPopAt = 0;
+    eatPopCell = null;
+    ghostTimerEl.style.display = 'none';
+    placeObstacles();
     placeFood();
     scoreEl.textContent = 'Score: 0';
+  }
+
+  function placeObstacles() {
+    obstacles = [];
+    if (!OBSTACLE_COUNT) return;
+    // Keep a clear buffer zone around the snake's starting row so the player
+    // doesn't die on tick 1 before they've even had a chance to react.
+    const mid = Math.floor(GRID / 2);
+    const safeZone = new Set();
+    for (let x = mid - 4; x <= mid + 2; x++) {
+      for (let y = mid - 2; y <= mid + 2; y++) {
+        safeZone.add(x + ',' + y);
+      }
+    }
+    const candidates = [];
+    for (let x = 0; x < GRID; x++) {
+      for (let y = 0; y < GRID; y++) {
+        const k = x + ',' + y;
+        if (!safeZone.has(k)) candidates.push({ x, y });
+      }
+    }
+    // Shuffle (Fisher-Yates) then take the first N — uniform without replacement.
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    obstacles = candidates.slice(0, Math.min(OBSTACLE_COUNT, candidates.length));
+  }
+
+  // Shared by food/powerup placement so nothing ever spawns on top of the
+  // snake, obstacles, or another already-placed collectible.
+  function occupiedCells() {
+    const occ = new Set(snake.map(s => s.x + ',' + s.y));
+    obstacles.forEach(o => occ.add(o.x + ',' + o.y));
+    if (food) occ.add(food.x + ',' + food.y);
+    if (ghostPowerup) occ.add(ghostPowerup.x + ',' + ghostPowerup.y);
+    if (bonusPowerup) occ.add(bonusPowerup.x + ',' + bonusPowerup.y);
+    return occ;
+  }
+
+  function randomFreeCell(excludeSet) {
+    const free = [];
+    for (let x = 0; x < GRID; x++) {
+      for (let y = 0; y < GRID; y++) {
+        const k = x + ',' + y;
+        if (!excludeSet.has(k)) free.push({ x, y });
+      }
+    }
+    if (free.length === 0) return null;
+    return free[Math.floor(Math.random() * free.length)];
   }
 
   function placeFood() {
     // Guaranteed valid placement: build free-cell list, pick uniformly.
     // Avoids infinite random-retry loops when snake nearly fills the board.
-    const occupied = new Set(snake.map(s => s.x + ',' + s.y));
-    const free = [];
-    for (let x = 0; x < GRID; x++) {
-      for (let y = 0; y < GRID; y++) {
-        const k = x + ',' + y;
-        if (!occupied.has(k)) free.push({ x, y });
-      }
-    }
-    if (free.length === 0) {
-      // Full board = win condition, handled by caller via checkWin()
-      food = null;
-      return;
-    }
-    food = free[Math.floor(Math.random() * free.length)];
+    food = null; // exclude old food from its own occupied check
+    food = randomFreeCell(occupiedCells());
+    if (food) foodSpawnAt = performance.now();
+  }
+
+  function trySpawnGhostPowerup() {
+    if (ghostPowerup) return; // one at a time
+    ghostPowerup = randomFreeCell(occupiedCells());
+    if (ghostPowerup) ghostSpawnAt = performance.now();
+  }
+
+  function trySpawnBonusPowerup() {
+    if (bonusPowerup) return;
+    bonusPowerup = randomFreeCell(occupiedCells());
+    if (bonusPowerup) bonusSpawnAt = performance.now();
   }
 
   function checkWin() {
-    return snake.length >= GRID * GRID;
+    return snake.length >= (GRID * GRID - obstacles.length);
   }
 
   // ---- Input ----
-  const KEY_DIRS = {
-    ArrowUp: { x: 0, y: -1 }, w: { x: 0, y: -1 }, W: { x: 0, y: -1 },
-    ArrowDown: { x: 0, y: 1 }, s: { x: 0, y: 1 }, S: { x: 0, y: 1 },
-    ArrowLeft: { x: -1, y: 0 }, a: { x: -1, y: 0 }, A: { x: -1, y: 0 },
-    ArrowRight: { x: 1, y: 0 }, d: { x: 1, y: 0 }, D: { x: 1, y: 0 }
+  // Bound by event.code (physical key position), NOT event.key (character).
+  // This makes WASD work identically regardless of keyboard layout —
+  // Persian, English, or anything else — since .code reports the physical
+  // key pressed, not the glyph it produces. Arrow keys are layout-independent
+  // by nature and included for the same physical keys regardless of layout.
+  const CODE_DIRS = {
+    ArrowUp: { x: 0, y: -1 }, KeyW: { x: 0, y: -1 },
+    ArrowDown: { x: 0, y: 1 }, KeyS: { x: 0, y: 1 },
+    ArrowLeft: { x: -1, y: 0 }, KeyA: { x: -1, y: 0 },
+    ArrowRight: { x: 1, y: 0 }, KeyD: { x: 1, y: 0 }
   };
 
   function queueDir(nd) {
@@ -440,7 +631,7 @@ const Sound = (function () {
       if (running && !gameOver) togglePause();
       return;
     }
-    const nd = KEY_DIRS[e.key];
+    const nd = CODE_DIRS[e.code];
     if (nd) {
       e.preventDefault();
       if (!running) return;
@@ -448,24 +639,38 @@ const Sound = (function () {
     }
   });
 
-  // Touch swipe support
+  // Touch swipe support — bound to the whole document (not just the canvas)
+  // so a swipe anywhere on screen steers the snake, and detected on
+  // touchmove rather than touchend so the direction fires the instant the
+  // gesture's intent is clear, not after the finger lifts. This removes the
+  // "wait for finger release" latency that touchend-based detection had.
+  const SWIPE_THRESHOLD = 16; // px of movement before a direction is committed
   let touchStart = null;
-  canvas.addEventListener('touchstart', (e) => {
+  let swipeFired = false; // true once this gesture has already triggered a turn
+
+  document.addEventListener('touchstart', (e) => {
     const t = e.changedTouches[0];
     touchStart = { x: t.clientX, y: t.clientY };
+    swipeFired = false;
   }, { passive: true });
-  canvas.addEventListener('touchend', (e) => {
-    if (!touchStart) return;
+
+  document.addEventListener('touchmove', (e) => {
+    if (!touchStart || swipeFired || !running) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStart.x;
     const dy = t.clientY - touchStart.y;
-    touchStart = null;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return; // ignore tap
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD) return;
+    swipeFired = true; // lock: ignore the rest of this gesture's movement
     if (Math.abs(dx) > Math.abs(dy)) {
       queueDir(dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 });
     } else {
       queueDir(dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 });
     }
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    touchStart = null;
+    swipeFired = false;
   }, { passive: true });
 
   function togglePause() {
@@ -481,6 +686,10 @@ const Sound = (function () {
 
   // ---- Tick / simulation ----
   function tick() {
+    // Snapshot current positions before mutating, so render() can interpolate
+    // between this and the post-tick positions. Render-only; no logic reads this.
+    prevSnake = snake.map(s => ({ x: s.x, y: s.y }));
+
     if (queuedDirs.length) {
       dir = queuedDirs.shift();
       Sound.turn();
@@ -498,6 +707,16 @@ const Sound = (function () {
       return endGame();
     }
 
+    // Obstacle collision (Iranian mode only — obstacles is empty elsewhere).
+    // Suppressed while ghost effect is active, by design.
+    if (ghostActiveMs <= 0) {
+      for (let i = 0; i < obstacles.length; i++) {
+        if (obstacles[i].x === nx && obstacles[i].y === ny) {
+          return endGame();
+        }
+      }
+    }
+
     // Self collision: check against body, but the tail cell is allowed
     // because it will vacate this same tick (unless we're about to eat,
     // in which case the tail does NOT move, so it must stay blocked).
@@ -511,7 +730,28 @@ const Sound = (function () {
 
     snake.unshift({ x: nx, y: ny });
 
-    if (willEat) {
+    // Powerup pickups: do NOT grow the snake (unlike food), so tail still
+    // pops normally. Checked before the food branch's pop/no-pop decision.
+    let ateFood = willEat;
+    if (ghostPowerup && nx === ghostPowerup.x && ny === ghostPowerup.y) {
+      eatPopCell = { x: ghostPowerup.x, y: ghostPowerup.y };
+      eatPopAt = performance.now();
+      ghostPowerup = null;
+      ghostActiveMs = GHOST_DURATION_MS;
+      Sound.speedUp(); // reuse as a distinct pickup chime
+    }
+    if (bonusPowerup && nx === bonusPowerup.x && ny === bonusPowerup.y) {
+      eatPopCell = { x: bonusPowerup.x, y: bonusPowerup.y };
+      eatPopAt = performance.now();
+      bonusPowerup = null;
+      score += BONUS_POINTS;
+      scoreEl.textContent = 'Score: ' + score;
+      Sound.win(); // short ascending chime, reused for a bonus pickup feel
+    }
+
+    if (ateFood) {
+      eatPopCell = { x: nx, y: ny };
+      eatPopAt = performance.now();
       score++;
       scoreEl.textContent = 'Score: ' + score;
       Sound.eat();
@@ -545,6 +785,17 @@ const Sound = (function () {
   }
 
   // ---- Render ----
+  // Ease-out scale-in factor (0 to 1) for an item that spawned `spawnAt` ms
+  // ago. Used to make food/powerups "pop" into existence instead of
+  // appearing instantly.
+  function spawnScale(spawnAt) {
+    if (!spawnAt) return 1;
+    const elapsed = performance.now() - spawnAt;
+    if (elapsed >= SPAWN_POP_MS) return 1;
+    const p = elapsed / SPAWN_POP_MS;
+    return 1 - Math.pow(1 - p, 3); // cubic ease-out
+  }
+
   function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -558,33 +809,133 @@ const Sound = (function () {
       ctx.stroke();
     }
 
-    // food
-    if (food) {
-      const fx = food.x * cell + cell / 2;
-      const fy = food.y * cell + cell / 2;
-      const r = cell * 0.38;
-      ctx.fillStyle = '#ff5d5d';
+    // obstacles (Iranian mode) — rendered with reduced opacity while ghost
+    // is active, to visually communicate "you can pass through these now"
+    if (obstacles.length) {
+      ctx.fillStyle = ghostActiveMs > 0 ? 'rgba(90,74,58,0.35)' : '#5a4a3a';
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      obstacles.forEach(o => {
+        const px = o.x * cell, py = o.y * cell;
+        const pad = cell * 0.04;
+        ctx.fillRect(px + pad, py + pad, cell - pad * 2, cell - pad * 2);
+        ctx.strokeRect(px + pad, py + pad, cell - pad * 2, cell - pad * 2);
+      });
+    }
+
+    // ghost powerup — pulsing pale cyan diamond, with pop-in scale on spawn
+    if (ghostPowerup) {
+      const gx = ghostPowerup.x * cell + cell / 2;
+      const gy = ghostPowerup.y * cell + cell / 2;
+      const pulse = 0.75 + 0.25 * Math.sin(performance.now() / 180);
+      const pop = spawnScale(ghostSpawnAt);
+      const r = cell * 0.34 * pulse * pop;
+      ctx.fillStyle = 'rgba(150, 230, 255, 0.85)';
       ctx.beginPath();
-      ctx.arc(fx, fy, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      ctx.beginPath();
-      ctx.arc(fx - r * 0.3, fy - r * 0.3, r * 0.25, 0, Math.PI * 2);
+      ctx.moveTo(gx, gy - r); ctx.lineTo(gx + r, gy);
+      ctx.lineTo(gx, gy + r); ctx.lineTo(gx - r, gy);
+      ctx.closePath();
       ctx.fill();
     }
 
-    // snake
+    // bonus powerup — gold burst, with pop-in scale on spawn
+    if (bonusPowerup) {
+      const bx = bonusPowerup.x * cell + cell / 2;
+      const by = bonusPowerup.y * cell + cell / 2;
+      const pop = spawnScale(bonusSpawnAt);
+      const r = cell * 0.32 * pop;
+      ctx.fillStyle = '#ffd24a';
+      ctx.beginPath();
+      ctx.arc(bx, by, r, 0, Math.PI * 2);
+      ctx.fill();
+      if (pop > 0.4) {
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = `bold ${Math.round(cell * 0.42)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.globalAlpha = pop;
+        ctx.fillText('+', bx, by + cell * 0.02);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // food — radial gradient with pop-in scale on spawn
+    if (food) {
+      const fx = food.x * cell + cell / 2;
+      const fy = food.y * cell + cell / 2;
+      const pop = spawnScale(foodSpawnAt);
+      const r = cell * 0.38 * pop;
+      if (r > 0.5) {
+        const grad = ctx.createRadialGradient(fx - r * 0.3, fy - r * 0.3, r * 0.1, fx, fy, r);
+        grad.addColorStop(0, '#ff9d8a');
+        grad.addColorStop(1, '#ff5d5d');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(fx, fy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // brief expanding ring burst at the cell where food/powerup was just eaten
+    if (eatPopCell && eatPopAt) {
+      const elapsed = performance.now() - eatPopAt;
+      if (elapsed < SPAWN_POP_MS) {
+        const p = elapsed / SPAWN_POP_MS;
+        const ex = eatPopCell.x * cell + cell / 2;
+        const ey = eatPopCell.y * cell + cell / 2;
+        const r = cell * 0.4 * (1 + p * 0.8);
+        ctx.strokeStyle = `rgba(255,255,255,${0.5 * (1 - p)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ex, ey, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // snake — rendered at an interpolated position between its pre-tick and
+    // post-tick grid cells, based on how far we are through the current tick
+    // interval. This is purely visual: tick()/collision logic still operates
+    // on whole grid cells exactly as before.
+    const t = gameOver ? 1 : Math.min(1, acc / stepMs);
+    const ghosting = ghostActiveMs > 0;
     for (let i = snake.length - 1; i >= 0; i--) {
       const s = snake[i];
-      const px = s.x * cell;
-      const py = s.y * cell;
+      const p = prevSnake[i];
+      let drawX = s.x, drawY = s.y;
+      if (p) {
+        const dx = s.x - p.x, dy = s.y - p.y;
+        // A jump of more than 1 cell means a wrap-around teleport (Iranian
+        // mode) — interpolating that would visibly slide the segment across
+        // the whole board, so snap instead of lerp for that one frame.
+        if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+          drawX = p.x + dx * t;
+          drawY = p.y + dy * t;
+        }
+      }
+      const px = drawX * cell;
+      const py = drawY * cell;
       const pad = cell * 0.08;
       const isHead = i === 0;
-      ctx.fillStyle = isHead ? '#6ef08a' : '#4ecb71';
+      if (ghosting) {
+        ctx.globalAlpha = 0.65;
+        ctx.fillStyle = isHead ? '#a8f0ff' : '#6fd8ec';
+      } else if (isHead) {
+        ctx.shadowColor = 'rgba(110, 240, 138, 0.5)';
+        ctx.shadowBlur = cell * 0.4;
+        ctx.fillStyle = '#6ef08a';
+      } else {
+        // Tapered gradient trail: opacity/lightness eases from head to tail
+        // so the body reads as a continuous trail rather than uniform blocks.
+        const frac = i / Math.max(1, snake.length - 1); // 0 near head, 1 at tail
+        const lightness = 0.55 - frac * 0.18;
+        ctx.fillStyle = `hsl(152, 55%, ${lightness * 100}%)`;
+      }
       roundRect(ctx, px + pad, py + pad, cell - pad * 2, cell - pad * 2, cell * 0.22);
       ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
       if (isHead) {
-        drawEyes(s, dir);
+        drawEyes({ x: drawX, y: drawY }, dir);
       }
     }
   }
@@ -622,6 +973,29 @@ const Sound = (function () {
     lastTs = ts;
     // Clamp delta so a dropped/backgrounded tab doesn't fire many ticks at once
     if (delta > 250) delta = 250;
+
+    if (WRAP) {
+      // Powerup timers run on wall-clock time, independent of the grid tick
+      // rate, so they're consistent regardless of difficulty speed.
+      ghostSpawnTimer += delta;
+      if (ghostSpawnTimer >= GHOST_INTERVAL_MS) {
+        ghostSpawnTimer = 0;
+        trySpawnGhostPowerup();
+      }
+      bonusSpawnTimer += delta;
+      if (bonusSpawnTimer >= BONUS_INTERVAL_MS) {
+        bonusSpawnTimer = 0;
+        trySpawnBonusPowerup();
+      }
+      if (ghostActiveMs > 0) {
+        ghostActiveMs = Math.max(0, ghostActiveMs - delta);
+        ghostTimerEl.style.display = 'inline';
+        ghostTimerEl.textContent = '👻 ' + Math.ceil(ghostActiveMs / 1000) + 's';
+      } else {
+        ghostTimerEl.style.display = 'none';
+      }
+    }
+
     acc += delta;
     while (acc >= stepMs) {
       tick();
