@@ -5,10 +5,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Snake</title>
 <style>
+  /* ── Theme variables ───────────────────────────────────── */
+  :root {
+    --bg:            #07070c;
+    --overlay-bg:    rgba(7,7,12,0.72);
+    --hud-color:     #e8e8e8;
+    --diff-btn-bg:   rgba(255,255,255,0.06);
+    --diff-btn-bdr:  rgba(255,255,255,0.14);
+    --diff-btn-clr:  #bbb;
+    --overlay-p:     rgba(255,255,255,0.65);
+    --grid-line:     rgba(255,255,255,0.04);
+    --icon-color:    #e8e8e8;
+    --wm-color:      #ffffff;
+    --wm-bg:         rgba(20,20,24,0.55);
+    --wm-border:     rgba(255,255,255,0.22);
+    --wm-inset:      rgba(255,255,255,0.15);
+  }
+  body.is-light {
+    --bg:            #f0ede6;
+    --overlay-bg:    rgba(240,237,230,0.82);
+    --hud-color:     #1a1a1a;
+    --diff-btn-bg:   rgba(0,0,0,0.06);
+    --diff-btn-bdr:  rgba(0,0,0,0.18);
+    --diff-btn-clr:  #333;
+    --overlay-p:     rgba(0,0,0,0.55);
+    --grid-line:     rgba(0,0,0,0.07);
+    --icon-color:    #1a1a1a;
+    --wm-color:      #ffffff;
+    --wm-bg:         rgba(80,80,80,0.45);
+    --wm-border:     rgba(255,255,255,0.3);
+    --wm-inset:      rgba(255,255,255,0.25);
+  }
+
+  /* ── Base layout ───────────────────────────────────────── */
   html, body {
     margin: 0;
     height: 100%;
-    background: #07070c;
+    background: var(--bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -16,6 +49,7 @@
     overscroll-behavior: none;
     touch-action: none;
     -webkit-text-size-adjust: 100%;
+    transition: background 0.3s ease;
   }
   body {
     flex-direction: column;
@@ -31,12 +65,9 @@
     aspect-ratio: 1 / 1;
     flex-shrink: 0;
   }
-  body.is-fullscreen #wrap {
-    width: min(95vw, 85svh, 700px);
-  }
-  body.is-fullscreen #hud {
-    width: min(95vw, 85svh, 700px);
-  }
+  body.is-fullscreen #wrap { width: min(95vw, 85svh, 700px); }
+  body.is-fullscreen #hud  { width: min(95vw, 85svh, 700px); }
+
   canvas {
     position: absolute;
     top: 0; left: 0;
@@ -44,14 +75,16 @@
     height: 100%;
     border-radius: 8px;
   }
-  #bg { z-index: 0; }
+  #bg   { z-index: 0; }
   #game { z-index: 1; touch-action: none; }
+
+  /* ── HUD ───────────────────────────────────────────────── */
   #hud {
     width: min(92vw, 72svh, 520px);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    color: #e8e8e8;
+    color: var(--hud-color);
     font-size: clamp(13px, 4vw, 18px);
     letter-spacing: 0.5px;
     flex-shrink: 0;
@@ -66,10 +99,21 @@
     background-clip: text;
     color: transparent;
   }
-  #best {
-    color: #ffd24a;
-    opacity: 0.9;
+  #best { color: #ffd24a; opacity: 0.9; }
+
+  /* ── HUD icon buttons ──────────────────────────────────── */
+  #muteBtn, #fullscreenBtn, #themeBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--icon-color);
+    padding: 0 5px;
+    line-height: 1;
+    transition: color 0.2s ease;
   }
+
+  /* ── Overlay ───────────────────────────────────────────── */
   #overlay {
     position: absolute;
     z-index: 3;
@@ -79,13 +123,14 @@
     align-items: center;
     justify-content: center;
     color: #fff;
-    background: rgba(7,7,12,0.72);
+    background: var(--overlay-bg);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     border-radius: 8px;
     text-align: center;
     padding: 20px;
     box-sizing: border-box;
+    transition: background 0.3s ease;
   }
   #overlay.hidden { display: none; }
   #overlay h1 {
@@ -100,7 +145,7 @@
   }
   #overlay p {
     margin: 3px 0;
-    opacity: 0.65;
+    color: var(--overlay-p);
     font-size: 13px;
     font-weight: 400;
   }
@@ -122,6 +167,8 @@
     transform: scale(0.96);
     box-shadow: 0 2px 10px rgba(78,203,113,0.3);
   }
+
+  /* ── Difficulty buttons ────────────────────────────────── */
   #diffRow {
     display: flex;
     gap: 8px;
@@ -133,10 +180,10 @@
     padding: 8px 14px;
     font-size: 12.5px;
     font-weight: 600;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.14);
+    background: var(--diff-btn-bg);
+    border: 1px solid var(--diff-btn-bdr);
     border-radius: 20px;
-    color: #bbb;
+    color: var(--diff-btn-clr);
     cursor: pointer;
     font-family: inherit;
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
@@ -147,14 +194,51 @@
     border-color: transparent;
     font-weight: 700;
   }
-  #muteBtn, #fullscreenBtn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
-    color: #e8e8e8;
-    padding: 0 6px;
-    line-height: 1;
+
+  /* ── Speed bar ─────────────────────────────────────────── */
+  #speedBar {
+    width: min(92vw, 72svh, 520px);
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  body.is-fullscreen #speedBar { width: min(95vw, 85svh, 700px); }
+  body.is-light #speedBar { background: rgba(0,0,0,0.10); }
+  #speedFill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #4ecb71, #4ecbb8);
+    transition: width 0.12s ease, background 0.3s ease;
+  }
+  #speedFill.maxed {
+    background: linear-gradient(90deg, #ff5d5d, #ff9d2a);
+  }
+  #watermark {
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--wm-color);
+    letter-spacing: 0.5px;
+    text-align: center;
+    pointer-events: none;
+    z-index: 50;
+    padding: 10px 24px;
+    border-radius: 999px;
+    background: var(--wm-bg);
+    border: 1.5px solid var(--wm-border);
+    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 var(--wm-inset),
+      0 4px 16px rgba(0,0,0,0.4);
+    white-space: nowrap;
+    transition: background 0.3s ease, border-color 0.3s ease;
   }
 </style>
 </head>
@@ -163,9 +247,11 @@
   <span id="score">Score: 0</span>
   <span id="ghostTimer" style="display:none;color:#a8f0ff;">👻 0s</span>
   <button id="fullscreenBtn" title="Toggle fullscreen">⛶</button>
+  <button id="themeBtn" title="Toggle theme">🌙</button>
   <button id="muteBtn" title="Toggle sound">🔊</button>
   <span id="best">Best: 0</span>
 </div>
+<div id="speedBar"><div id="speedFill"></div></div>
 <div id="wrap">
   <canvas id="bg"></canvas>
   <canvas id="game"></canvas>
@@ -182,6 +268,7 @@
     <button id="startBtn">Start</button>
   </div>
 </div>
+<div id="watermark">Powered by Petros</div>
 
 
 <script>
@@ -215,16 +302,20 @@
     precision mediump float;
     uniform float uTime;
     uniform vec2 uResolution;
+    uniform float uLight;
     void main() {
       vec2 uv = gl_FragCoord.xy / uResolution.xy;
       vec2 c = uv - 0.5;
       float d = length(c);
       float pulse = 0.5 + 0.5 * sin(uTime * 0.6);
       float glow = smoothstep(0.75, 0.0, d) * (0.20 + 0.08 * pulse);
-      vec3 base = vec3(0.027, 0.027, 0.047);
-      vec3 tint = vec3(0.12, 0.30, 0.28) * glow;
-      vec3 color = base + tint;
-      gl_FragColor = vec4(color, 1.0);
+      vec3 darkBase = vec3(0.027, 0.027, 0.047);
+      vec3 darkTint = vec3(0.12, 0.30, 0.28) * glow;
+      vec3 lightBase = vec3(0.94, 0.93, 0.90);
+      vec3 lightTint = vec3(0.05, 0.20, 0.18) * glow * 0.5;
+      vec3 base = mix(darkBase, lightBase, uLight);
+      vec3 tint = mix(darkTint, lightTint, uLight);
+      gl_FragColor = vec4(base + tint, 1.0);
     }
   `;
 
@@ -262,6 +353,7 @@
   const aPos = gl.getAttribLocation(program, 'aPos');
   const uTime = gl.getUniformLocation(program, 'uTime');
   const uRes = gl.getUniformLocation(program, 'uResolution');
+  const uLight = gl.getUniformLocation(program, 'uLight');
 
   gl.useProgram(program);
   gl.enableVertexAttribArray(aPos);
@@ -273,6 +365,7 @@
     resize();
     gl.uniform1f(uTime, t * 0.001);
     gl.uniform2f(uRes, canvas.width, canvas.height);
+    gl.uniform1f(uLight, document.body.classList.contains('is-light') ? 1.0 : 0.0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     raf = requestAnimationFrame(frame);
   }
@@ -398,6 +491,36 @@ const Sound = (function () {
     muteBtn.textContent = m ? '🔇' : '🔊';
   });
 
+  // Theme toggle: 🌙 dark (default) ↔ ☀️ light
+  // Persisted in localStorage so the user's preference survives reloads.
+  const themeBtn = document.getElementById('themeBtn');
+  let isLight = localStorage.getItem('snakeTheme') === 'light';
+
+  function applyThemeCSS() {
+    // Only touches DOM/CSS — safe to call before game state is initialized.
+    document.body.classList.toggle('is-light', isLight);
+    themeBtn.textContent = isLight ? '☀️' : '🌙';
+    themeBtn.title = isLight ? 'Switch to dark mode' : 'Switch to light mode';
+    localStorage.setItem('snakeTheme', isLight ? 'light' : 'dark');
+  }
+
+  function applyTheme() {
+    applyThemeCSS();
+    // Canvas calls require game state (paused, running, dpr etc.) to exist.
+    // Only call this after initGame() has fully run.
+    resizeCanvas();
+    if (!running) render();
+  }
+
+  applyThemeCSS(); // apply saved CSS preference immediately — no game state needed
+
+  themeBtn.addEventListener('click', () => {
+    Sound.init();
+    Sound.click();
+    isLight = !isLight;
+    applyTheme(); // full apply fine here — game state exists by click time
+  });
+
   // Fullscreen toggle. Targets the whole document, not just the canvas, so
   // the entire page (HUD, board, overlay) goes fullscreen together. Feature
   // detection covers vendor-prefixed variants on older Android WebViews;
@@ -473,6 +596,13 @@ const Sound = (function () {
   let eatPopAt = 0;       // last time food/powerup was eaten, for a brief burst at that cell
   let eatPopCell = null;  // {x,y} where the last pop should render
 
+  // Game-over death animation state — purely visual, logic already resolved
+  const DEATH_ANIM_MS = 600; // total duration of collapse animation
+  let deathAnimAt = 0;       // performance.now() when death animation started, 0 = inactive
+  let deathSnakeSnapshot = null; // frozen copy of snake at moment of death for animation
+
+  const speedFill = document.getElementById('speedFill');
+
   // Iranian-mode powerups. Both spawn as collectibles on the board (not
   // automatic) and only exist when WRAP is true (Iranian is the only mode
   // with obstacles for ghost to matter, and we don't want stray powerups
@@ -520,7 +650,11 @@ const Sound = (function () {
     foodSpawnAt = performance.now();
     eatPopAt = 0;
     eatPopCell = null;
+    deathAnimAt = 0;
+    deathSnakeSnapshot = null;
     ghostTimerEl.style.display = 'none';
+    speedFill.style.width = '0%';
+    speedFill.classList.remove('maxed');
     placeObstacles();
     placeFood();
     scoreEl.textContent = 'Score: 0';
@@ -759,6 +893,12 @@ const Sound = (function () {
         stepMs = Math.max(MIN_STEP_MS, stepMs - SPEEDUP_AMOUNT);
         Sound.speedUp();
       }
+      // Update speed bar — shows progress toward next speed-up
+      const atMax = stepMs <= MIN_STEP_MS;
+      const progressInCycle = score % SPEEDUP_EVERY;
+      const pct = atMax ? 100 : (progressInCycle / SPEEDUP_EVERY) * 100;
+      speedFill.style.width = pct + '%';
+      speedFill.classList.toggle('maxed', atMax);
       if (checkWin()) {
         return endGame(true);
       }
@@ -776,12 +916,30 @@ const Sound = (function () {
       setBest(score);
       bestEl.textContent = 'Best: ' + score;
     }
-    if (won) Sound.win(); else Sound.death();
-    showOverlay(
-      won ? 'You Win!' : 'Game Over',
-      'Play Again',
-      `Score: ${score}  •  Best: ${Math.max(score, best)}  •  ${DIFFICULTIES[currentDiff].label}`
-    );
+    if (won) {
+      Sound.win();
+      showOverlay('You Win!', 'Play Again',
+        `Score: ${score}  •  Best: ${Math.max(score, best)}  •  ${DIFFICULTIES[currentDiff].label}`);
+    } else {
+      Sound.death();
+      // Snapshot snake for death animation, then delay overlay until it finishes
+      deathSnakeSnapshot = snake.map(s => ({ x: s.x, y: s.y }));
+      deathAnimAt = performance.now();
+      // Keep render loop running during animation via a dedicated animation loop
+      const animLoop = () => {
+        const elapsed = performance.now() - deathAnimAt;
+        render();
+        if (elapsed < DEATH_ANIM_MS) {
+          requestAnimationFrame(animLoop);
+        } else {
+          deathAnimAt = 0;
+          deathSnakeSnapshot = null;
+          showOverlay('Game Over', 'Play Again',
+            `Score: ${score}  •  Best: ${Math.max(score, best)}  •  ${DIFFICULTIES[currentDiff].label}`);
+        }
+      };
+      requestAnimationFrame(animLoop);
+    }
   }
 
   // ---- Render ----
@@ -799,8 +957,9 @@ const Sound = (function () {
   function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // grid (subtle)
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    // grid — color adapts to current theme
+    const gridColor = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = gridColor;
     ctx.lineWidth = 1;
     for (let i = 1; i < GRID; i++) {
       ctx.beginPath();
@@ -812,8 +971,10 @@ const Sound = (function () {
     // obstacles (Iranian mode) — rendered with reduced opacity while ghost
     // is active, to visually communicate "you can pass through these now"
     if (obstacles.length) {
-      ctx.fillStyle = ghostActiveMs > 0 ? 'rgba(90,74,58,0.35)' : '#5a4a3a';
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillStyle = ghostActiveMs > 0
+        ? (isLight ? 'rgba(100,80,60,0.20)' : 'rgba(90,74,58,0.35)')
+        : (isLight ? '#7a5c3a' : '#5a4a3a');
+      ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 1;
       obstacles.forEach(o => {
         const px = o.x * cell, py = o.y * cell;
@@ -898,6 +1059,42 @@ const Sound = (function () {
     // on whole grid cells exactly as before.
     const t = gameOver ? 1 : Math.min(1, acc / stepMs);
     const ghosting = ghostActiveMs > 0;
+
+    // Death animation: if deathAnimAt is set, override normal snake rendering
+    // with a staggered collapse — each segment flashes red and shrinks outward
+    // from the head, creating a "disintegrate from front to back" effect.
+    if (deathAnimAt && deathSnakeSnapshot) {
+      const elapsed = performance.now() - deathAnimAt;
+      const totalSegs = deathSnakeSnapshot.length;
+      deathSnakeSnapshot.forEach((s, i) => {
+        // Each segment starts its collapse slightly after the one before it
+        const segDelay = (i / totalSegs) * DEATH_ANIM_MS * 0.6;
+        const segElapsed = Math.max(0, elapsed - segDelay);
+        const segProgress = Math.min(1, segElapsed / (DEATH_ANIM_MS * 0.5));
+        if (segProgress <= 0) {
+          // Not yet started — draw normally
+          ctx.fillStyle = i === 0 ? '#6ef08a' : '#4ecb71';
+        } else {
+          // Flash: interpolate from green → red → transparent
+          const r = Math.round(78 + (255 - 78) * Math.min(1, segProgress * 2));
+          const g = Math.round(203 * (1 - segProgress));
+          const b = Math.round(113 * (1 - segProgress));
+          ctx.fillStyle = `rgba(${r},${g},${b},${1 - segProgress * 0.9})`;
+        }
+        const shrink = 1 - segProgress * 0.85;
+        const px = s.x * cell;
+        const py = s.y * cell;
+        const pad = cell * 0.08;
+        const w = (cell - pad * 2) * shrink;
+        const h = (cell - pad * 2) * shrink;
+        const ox = (cell - pad * 2 - w) / 2;
+        const oy = (cell - pad * 2 - h) / 2;
+        roundRect(ctx, px + pad + ox, py + pad + oy, w, h, cell * 0.22 * shrink);
+        ctx.fill();
+      });
+      return; // skip normal snake rendering during death animation
+    }
+
     for (let i = snake.length - 1; i >= 0; i--) {
       const s = snake[i];
       const p = prevSnake[i];
@@ -1046,10 +1243,12 @@ const Sound = (function () {
     start();
   });
 
-  // Initial paint so board isn't blank behind the start overlay
+  // Initial paint so board isn't blank behind the start overlay.
+  // applyTheme() is called here (not at declaration time) because it needs
+  // resizeCanvas()/render() which require game state to exist first.
   resizeCanvas();
   resetState();
-  render();
+  applyTheme();
   showOverlay('Snake', 'Start');
 })();
 </script>
